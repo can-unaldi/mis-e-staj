@@ -1,0 +1,66 @@
+const mongoose = require("mongoose");
+
+const Schema = mongoose.Schema;
+
+const applicationSchema = new Schema({
+  //öğrenci bilgileri
+  studentName: { type: String, required: true },
+  studentEmail: { type: String, required: true },
+  doubleMajor: { type: Boolean, required: true },
+  doubleMajorDepartment: { type: String },
+  studentId: { type: String, required: true },
+  semesterCompleted: { type: Number, required: true },
+  creditsCompleted: { type: Number, required: true },
+  studentTC: { type: String, required: true },
+  studentBday: { type: String, required: true },
+  studentPhone: { type: String, required: true },
+  //şirket bilgileri  
+  companyName: { type: String, required: true },
+  companyAddress: { type: String, required: true },
+  companyPhone: { type: String, required: true },
+  supervisorName: { type: String, required: true },
+  supervisorEmail: { type: String, required: true },
+  supervisorPhone: { type: String, required: true },
+  saturdayWork: { type: Boolean, required: true },
+  internshipDepartment: { type: String, required: true },
+  internshipArea: { type: String, required: true },
+  startDate: { type: Date, required: true },
+  endDate: { type: Date, required: true },
+  duration: { type: Number, required: true },
+  internshipDescription: { type: String, required: true },
+  internResponsibilities: { type: String, required: true },
+  supportOffered: { type: String, required: true },
+  //başvuru bilgileri
+  studentDepartment: { type: String},
+  companyTaxNo: { type: String },
+  numberOfEmployee: { type: Number },
+  companyBankBranchName: { type: String },
+  companyIbanNo: { type: String },
+  feeToStudent: { type: Number },
+  //data bilgileri
+  advisor: { type: mongoose.Types.ObjectId, ref: "User" },
+  studentApproval: { type: Boolean, required: true },
+  applicationDate: { type: Date, required: true },
+  companyApproval: { type: Boolean },
+  companyApprovalDate: { type: Date },
+  intershipManagerName: { type: String},
+  intershipManagerApproval: { type: Boolean},
+  intershipManagerApprovalDate: { type: Date },
+  advisorName: { type: String},
+  advisorApproval: { type: Boolean},
+  advisorApprovalDate: { type: Date },
+  departmentPersonName: { type: String },
+  departmentApproval: { type: Boolean },
+  departmentApprovalDate: { type: Date },
+  internshipApplicationForm:{ type: String },
+  ek1Form:{ type: String },
+  insuranceCertificate:{ type: String },
+  approved: { type: Boolean },
+  rejected: { type: Boolean},
+  rejectedMessage: { type: String},
+  rejectedDate: { type: Date},
+  rejectedBy: { type: mongoose.Types.ObjectId, ref: "User" },
+  student: { type: mongoose.Types.ObjectId, required: true, ref: "User" },
+});
+
+module.exports = mongoose.model("Application", applicationSchema);
