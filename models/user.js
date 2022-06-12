@@ -10,7 +10,7 @@ const userSchema = new Schema({
   type:{type: Number, required: true},
   profileComplated:{type: Boolean, required: true, length: 10},
   phoneNumber:{type: String, required: false, length: 10},
-  studentNumber:{type: String, required: false, length: 10},
+  studentNumber:{type: String, required: false, length: 10,unique:true},
   tcNumber:{type: String, required: false, length: 11},
   birthDate:{type: Date, required: false, length: 11},
   department:{type: String, required: false,},

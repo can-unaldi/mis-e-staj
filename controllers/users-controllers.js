@@ -34,75 +34,65 @@ const createUsers = async (req, res, next) => {
     );
     return next(error);
   }
-  console.log(advisors);
 
   let users = [];
-  try {
-    readXlsxFile(req.file.path)
-      .then((rows) => {
-        // skip header
-        rows.shift();
-        rows.forEach((row) => {
-          let advisor;
-          bcrypt.hash(row[2].toString(), 12, function (err, hash) {
-            // Store hash in your password DB.
-            console.log(hash);
-            advisors.forEach((adv) => {
-              console.log("for girdi", adv);
 
-              if (adv.email == row[3]) {
-                console.log("if girdi:", row[3]);
-
-                advisor = mongoose.Types.ObjectId(adv._id);
-                let user = {
-                  name: row[0],
-                  email: row[1],
-                  password: hash,
-                  type: 0,
-                  profileComplated: false,
-                  phoneNumber: null,
-                  studentNumber: null,
-                  tcNumber: null,
-                  birthDate: null,
-                  department: null,
-                  image: null,
-                  advisor: advisor || null,
-                  applications: [],
-                  internships: [],
-                  finishedInternship: [],
-                };
-                users.push(user);
-                console.log(users);
+  await readXlsxFile(req.file.path)
+    .then((rows) => {
+      // skip header
+      rows.shift();
+      for (const row of rows) {
+        let advisor;
+        bcrypt.hash(row[2].toString(), 12, function (err, hash) {
+          for (const adv of advisors) {
+            if (adv.email == row[3]) {
+              advisor = mongoose.Types.ObjectId(adv._id);
+              let user = {
+                name: row[0],
+                email: row[1],
+                password: hash,
+                type: 0,
+                profileComplated: false,
+                phoneNumber: null,
+                studentNumber: null,
+                tcNumber: null,
+                birthDate: null,
+                department: null,
+                image: null,
+                advisor: advisor || null,
+                applications: [],
+                internships: [],
+                finishedInternship: [],
+              };
+              users.push(user);
+              if (users.length == rows.length - 1) {
+                User.insertMany(
+                  users,
+                  { ordered: false },
+                  function (err, docs) {
+                    if (err) {
+                      console.log(err);
+                      const error = new HttpError(
+                        "Something went wrong, could not create users.",
+                        500
+                      );
+                      return next(error);
+                    } else {
+                      console.log("Users:", users);
+                      console.log("Docs:", docs);
+                      res.status(200).json({
+                        status: true,
+                        message: "Kullanıcılar başarı ile oluşturuldu",
+                      });
+                    }
+                  }
+                );
               }
-            });
-          });
-        });
-      })
-      .then((result) => {
-        User.insertMany(users, { ordered: false }, function (err, docs) {
-          if (err) {
-            console.log(err);
-            const error = new HttpError(
-              "Something went wrong, could not create users.",
-              500
-            );
-            return next(error);
-          } else {
-            res.status(200).json({
-              status: true,
-              message: "Kullanıcılar başarı ile oluşturuldu",
-            });
+            }
           }
         });
-      });
-  } catch (err) {
-    console.log(err);
-    const error = new HttpError(
-      "Something went wrong, could not create users.",
-      500
-    );
-    return next(error);
-  }
+      }
+    })
 };
 
 const getUsers = async (req, res, next) => {
@@ -397,7 +387,7 @@ const updateStudentByAdmin = async (req, res, next) => {
   try {
     await user.save();
   } catch (err) {
-    console.log("Err:",err);
+    console.log("Err:", err);
     const error = new HttpError(
       "Something went wrong, could not update user.",
       500
