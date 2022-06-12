@@ -7,11 +7,14 @@ const fs = require("fs");
 var XLSX = require("xlsx");
 const readXlsxFile = require("read-excel-file/node");
 var mongoose = require("mongoose");
+const Confirmation = require("../models/confirmation");
+const nodemailer = require("nodemailer");
 
 const HttpError = require("../models/http-error");
 const User = require("../models/user");
 
 const createUsers = async (req, res, next) => {
+  console.log("Girdi:createUsers");
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     console.log(errors);
@@ -34,18 +37,25 @@ const createUsers = async (req, res, next) => {
     );
     return next(error);
   }
-
+  let processFinished = false;
   let users = [];
-
-  await readXlsxFile(req.file.path)
-    .then((rows) => {
+  console.log(req.file);
+  try {
+    await readXlsxFile(req.file.path).then((rows) => {
       // skip header
       rows.shift();
       for (const row of rows) {
+        console.log("Girdi:Rows");
         let advisor;
         bcrypt.hash(row[2].toString(), 12, function (err, hash) {
+          console.log("Girdi:Hash");
+
           for (const adv of advisors) {
+            console.log("Girdi:Advisor");
+
             if (adv.email == row[3]) {
+              console.log("Girdi:Advisor Mached");
+
               advisor = mongoose.Types.ObjectId(adv._id);
               let user = {
                 name: row[0],
@@ -54,7 +64,7 @@ const createUsers = async (req, res, next) => {
                 type: 0,
                 profileComplated: false,
                 phoneNumber: null,
-                studentNumber: null,
+                studentNumber: row[2],
                 tcNumber: null,
                 birthDate: null,
                 department: null,
@@ -92,7 +102,18 @@ const createUsers = async (req, res, next) => {
           }
         });
       }
-    })
+    });
+  } catch (err) {
+    console.log(err);
+    const error = new HttpError(
+      "Kullanıcılar oluşturulamadı. Öğrenci numaralarını ve danışman mail adreslerini kontrol ediniz.",
+      500
+    );
+    return next(error);
+  }
+
+  if (users.length == 0) {
+  }
 };
 
 const getUsers = async (req, res, next) => {
@@ -113,6 +134,23 @@ const getUsers = async (req, res, next) => {
   res.json({ users: users.map((user) => user.toObject({ getters: true })) });
 };
 
+const getAdvisors = async (req, res, next) => {
+  let users;
+  try {
+    users = await User.find(
+      {type:1},
+      "-password -image -applications -internships -finishedInternship"
+    ).populate("advisor");
+  } catch (err) {
+    console.log(err);
+    const error = new HttpError(
+      "Fetching users failed, please try again later.",
+      500
+    );
+    return next(error);
+  }
+  res.json({ advisors: users.map((user) => user.toObject({ getters: true })) });
+};
 const signup = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -160,7 +198,7 @@ const signup = async (req, res, next) => {
     type,
     profileComplated: type != 0 ? true : false,
     phoneNumber: null,
-    studentNumber: null,
+    studentNumber: type != 0 ? null : password,
     tcNumber: null,
     birthDate: null,
     department: null,
@@ -486,13 +524,164 @@ const getStudent = async (req, res, next) => {
     advisors: advisors.map((user) => user.toObject({ getters: true })),
   });
 };
+
+const sendPasswordResetMail = async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return next(
+      new HttpError("Invalid inputs passed, please check your data.", 422)
+    );
+  }
+  console.log("Girdi:sendPasswordResetMail");
+
+  const {
+    email,
+  } = req.body;
+  let user;
+  try {
+    user = await User.findOne({email:email},"-password -image -applications -internships -finishedInternship");
+  } catch (err) {
+    const error = new HttpError(
+      "Something went wrong, could not find a user.",
+      500
+    );
+    return next(error);
+  }
+
+  if (!user) {
+    const error = new HttpError(
+      "Could not find user for the provided email.",
+      404
+    );
+    return next(error);
+  }
+  const token = uuid();
+
+  const createdConfirmation = new Confirmation({
+    token: token,
+    email: email,
+    date: new Date(),
+  });
+  console.log(createdConfirmation);
+
+  try {
+    await createdConfirmation.save();
+  } catch (err) {
+    console.log(err);
+    const error = new HttpError(
+      "Creating confirmation failed, please try again.",
+      500
+    );
+    return next(error);
+  }
+  let transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    secure: true, // true for 465, false for other ports
+    auth: {
+      user: process.env.SMTP_USERNAME, // generated ethereal user
+      pass: process.env.SMTP_PASSWORD, // generated ethereal password
+    },
+  });
+
+  let info = await transporter.sendMail({
+    from: `"${process.env.SMTP_NAME}" <${process.env.SMTP_USERNAME}>`, // sender address
+    to: email, // list of receivers
+    subject: "Boğaziçi Üniversitesi Yönetim Bilişim Sistemleri Şifre Sıfırlama", // Subject line
+    text: `Merhabalar, Şifrenizi sıfırlamak için altta bulunan kodu yeni şifrenizle birlikte girmeniz gerekmektedir. Doğrulama kodunuz: ${createdConfirmation.token}`, // plain text body
+    html: `
+    <p>Merhabalar,</b></p>
+    <p>Şifrenizi sıfırlamak için altta bulunan kodu yeni şifrenizle birlikte girmeniz gerekmektedir.</p>
+    <p>Doğrulama kodunuz: <b></b>${createdConfirmation.token}</b></p>`, // html body
+  });
+
+  res.json({ status: true, user: user });
+};
+
+const resetPassword = async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return next(
+      new HttpError("Invalid inputs passed, please check your data.", 422)
+    );
+  }
+  console.log("Girdi:updateUser");
+
+  const { confirmationToken, password } = req.body;
+  const userId = req.params.uid;
+
+  let confirmation;
+  try {
+    confirmation = await Confirmation.findOne({token:confirmationToken});
+  } catch (err) {
+    const error = new HttpError(
+      "Mail doğrulaması başarılı değil",
+      500
+    );
+    return next(error);
+  }
+
+  if ( new Date()-confirmation.date >180000 ) {
+    const error = new HttpError(
+      "Mail doğrulaması 3 dakika içerisinde yapılmalıdır.",
+      404
+    );
+    return next(error);
+  }
+  else{
+    console.log("if geçti");
+  }
+
+  let user;
+  try {
+    user = await User.findById(userId);
+  } catch (err) {
+    const error = new HttpError("Something went wrong, could not update.", 500);
+    return next(error);
+  }
+
+  let hashedPassword;
+  try {
+    hashedPassword = await bcrypt.hash(password, 12);
+  } catch (err) {
+    const error = new HttpError(
+      "Could not create user, please try again.",
+      500
+    );
+    return next(error);
+  }
+
+  if (!user) {
+    const error = new HttpError(
+      "Kullanıcı bulunamadı.",
+      403
+    );
+    return next(error);
+  }
+  user.password = hashedPassword;
+  console.log(user);
+  try {
+    await user.save();
+  } catch (err) {
+    const error = new HttpError(
+      "Something went wrong, could not update user.",
+      500
+    );
+    return next(error);
+  }
+
+  res.status(200).json({ user: user.toObject({ getters: true }) });
+};
 exports.createUsers = createUsers;
 exports.updateUser = updateUser;
 exports.updateStudentByAdmin = updateStudentByAdmin;
 exports.updateUserByAdmin = updateUserByAdmin;
 exports.getUsers = getUsers;
+exports.getAdvisors = getAdvisors;
 exports.getStudent = getStudent;
 exports.signup = signup;
 exports.login = login;
 exports.userInfo = userInfo;
 exports.deleteUser = deleteUser;
+exports.sendPasswordResetMail=sendPasswordResetMail;
+exports.resetPassword=resetPassword;

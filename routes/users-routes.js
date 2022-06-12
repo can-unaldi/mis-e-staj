@@ -9,6 +9,8 @@ const router = express.Router();
 
 router.get("/", usersController.getUsers);
 
+router.get("/advisors", usersController.getAdvisors);
+
 router.get("/student/:uid", usersController.getStudent);
 
 router.post(
@@ -29,7 +31,15 @@ router.post(
 );
 
 router.post("/login", usersController.login);
-
+router.post("/send-password-reset-mail", usersController.sendPasswordResetMail);
+router.patch(
+  "/reset-password/:uid",
+  [
+    check("confirmationToken").not().isEmpty(),
+    check("password").isLength({ min: 6 }),
+  ],
+  usersController.resetPassword
+);
 router.patch(
   "/:uid",
   [

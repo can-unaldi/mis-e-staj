@@ -44,6 +44,10 @@ router.post(
   finishedInternshipsControllers.createFinishedInternships
 );
 
+router.post(
+  "/admin/create-intership", finishedInternshipsControllers.createFinishedInternshipByAdmin
+);
+
 router.patch(
   "/company-evaluation/:iid",
   finishedInternshipsControllers.approveCompanyEvalutionForm

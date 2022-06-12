@@ -222,6 +222,87 @@ const createFinishedInternship = async (
   }
 };
 
+const createFinishedInternshipByAdmin = async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    console.log(errors);
+    return next(
+      new HttpError("Invalid inputs passed, please check your data.", 422)
+    );
+  }
+
+  const {
+    approvedWorkDayDuration,
+    companyAddress,
+    companyName,
+    companyPhone,
+    endDate,
+    insuranceStartDate,
+    numberOfEmployee,
+    startDate,
+    studentNumber,
+  } = req.body.data;
+
+  let user;
+  try {
+    user = await User.findOne({studentNumber:studentNumber});
+  } catch (err) {
+    console.log(err);
+    const error = new HttpError(
+      "Girmiş olduğunuz öğrenci numarasına ait öğrenci bulunamadı.",
+      500
+    );
+    return next(error);
+  }
+
+  if (!user) {
+    const error = new HttpError("Girmiş olduğunuz öğrenci numarasına ait öğrenci bulunamadı.", 404);
+    return next(error);
+  }
+
+  const createdInternship = new FinishedInternship({
+    studentName: user.name,
+    studentTC: user.tcNumber,
+    studentBday: user.birthDate,
+    studentId: user.studentNumber,
+    startDate: startDate,
+    endDate: endDate,
+    insuranceStartDate: insuranceStartDate,
+    approvedWorkDayDuration: approvedWorkDayDuration,
+    companyName: companyName,
+    numberOfEmployee: numberOfEmployee,
+    companyPhone: companyPhone,
+    companyAddress: companyAddress,
+    approveDate: new Date(),
+    internshipEndedDocument: true,
+    internshipReport: true,
+    internEvaluationForm: true,
+    companyEvaluationForm: true,
+    finishInternshipProcess: true,
+    student: user._id,
+  });
+
+
+
+  try {
+    const sess = await mongoose.startSession();
+    sess.startTransaction();
+    await createdInternship.save({ session: sess });
+    user.finishedInternship.push(createdInternship);
+    await user.save({ session: sess });
+    await sess.commitTransaction();
+  } catch (err) {
+    console.log(err);
+    const error = new HttpError(
+      "Creating finished internships failed, please try again.",
+      500
+    );
+    return next(error);
+  }
+
+  res.status(201).json({ status: true });
+};
+
 const updateInternship = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -330,54 +411,40 @@ const approveCompanyEvalutionForm = async (req, res, next) => {
 };
 
 const deleteInternship = async (req, res, next) => {
-  const placeId = req.params.pid;
+  const internshipId = req.params.iid;
 
-  let place;
+  let internship;
   try {
-    place = await Place.findById(placeId).populate("creator");
+    internship = await FinishedInternship.findById(internshipId).populate("student");
   } catch (err) {
     const error = new HttpError(
-      "Something went wrong, could not delete place.",
+      "Something went wrong, could not delete internship.",
       500
     );
     return next(error);
   }
 
-  if (!place) {
-    const error = new HttpError("Could not find place for this id.", 404);
+  if (!internship) {
+    const error = new HttpError("Could not find internship for this id.", 404);
     return next(error);
   }
-
-  if (place.creator.id !== req.userData.userId) {
-    const error = new HttpError(
-      "You are not allowed to delete this place.",
-      401
-    );
-    return next(error);
-  }
-
-  const imagePath = place.image;
 
   try {
     const sess = await mongoose.startSession();
     sess.startTransaction();
-    await place.remove({ session: sess });
-    place.creator.places.pull(place);
-    await place.creator.save({ session: sess });
+    await internship.remove({ session: sess });
+    internship.student.finishedInternship.pull(internship);
+    await internship.student.save({ session: sess });
     await sess.commitTransaction();
   } catch (err) {
     const error = new HttpError(
-      "Something went wrong, could not delete place.",
+      "Something went wrong, could not delete internship.",
       500
     );
     return next(error);
   }
 
-  fs.unlink(imagePath, (err) => {
-    console.log(err);
-  });
-
-  res.status(200).json({ message: "Deleted place." });
+  res.status(200).json({ message: "Staj başarı ile silindi." });
 };
 
 const sendIntershipToApproval = async (req, res, next) => {
@@ -912,7 +979,7 @@ const createFinishedInternships = async (req, res, next) => {
             user.finishedInternship.push(internship);
           }
         });
-          user.save();
+        user.save();
       });
       FinishedInternship.insertMany(
         internships,
@@ -950,6 +1017,7 @@ exports.sendMailToCompany = sendMailToCompany;
 exports.getFinishedIntershipsByUserId = getFinishedIntershipsByUserId;
 exports.getFinishedInterships = getFinishedInterships;
 exports.createFinishedInternship = createFinishedInternship;
+exports.createFinishedInternshipByAdmin=createFinishedInternshipByAdmin;
 exports.updateInternship = updateInternship;
 exports.deleteInternship = deleteInternship;
 exports.sendIntershipToApproval = sendIntershipToApproval;
